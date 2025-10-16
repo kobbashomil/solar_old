@@ -236,7 +236,8 @@ void handleRoot()
     html += "<p class='success'> تمت العملية بنجاح!</p>";
   }
 
-  // Display current time
+
+// Display current time
   html += "<p><strong>الوقت الحالي:</strong> " + String(timeBuffer) + "</p>";
   html += "<div class='btn-row'>"
     "<a href='/move?dir=east' class='btn east'>تحرك شرقًا</a>"
@@ -397,7 +398,7 @@ void loop()
     ensureAccessPointActive();
   }
 
-  // ...existing code...
+  
 
   // تحديث الوقت من RTC
   RtcDateTime now = Rtc.GetDateTime();
@@ -423,39 +424,44 @@ void loop()
      }
 
 
-    // 🌞 **الصباح: التحرك شرقًا بفواصل زمنية**
+    
     // الصباح: التحرك غربًا بفواصل زمنية
     else if (currentHour >= morningStartHour && currentHour < nightReturnHour)
     {
       returningToEast = false; // إعادة ضبط حالة العودة الليلية
+      // State variables for non-blocking motor movement
+      static bool stepInProgress = false; // True if a motor step is currently running
+      static unsigned long stepStartTime = 0; // Time when the current step started
 
-      if (!isMovingEast && !isMovingWest && (currentMillis - lastMoveTime >= (stepInterval * 60000)))
-      {
+      // Start a new motor step if enough time has passed and no step is in progress
+      if (!stepInProgress && !isMovingEast && !isMovingWest && (currentMillis - lastMoveTime >= (stepInterval * 60000))) {
         Serial.println("🌞 Auto Mode: Moving West Step");
-        moveWest();
-        delay(motorStepTime * 1000); // Convert seconds to milliseconds
-        stopMotor();
-        lastMoveTime = millis();
-      } 
-      
+        moveWest(); // Activate motor to move west
+        stepStartTime = millis(); // Record the start time of the step
+        stepInProgress = true; // Mark that a step is in progress
+      }
+
+      // Stop the motor after the step duration has elapsed
+      if (stepInProgress && (currentMillis - stepStartTime >= (motorStepTime * 1000))) {
+        stopMotor(); // Deactivate motor
+        lastMoveTime = millis(); // Update last move time for interval tracking
+        stepInProgress = false; // Mark that no step is in progress
+      }
     }
 
     // 🌙 **الليل: العودة إلى الشرق حتى الوصول إلى المستشعر**
-    else if (currentHour >= nightReturnHour && !returningToEast)
+    if (currentHour >= nightReturnHour)
     {
-      Serial.println("🌙 Auto Mode: Returning to East");
-
-      // الاستمرار في التحرك شرقًا حتى يلمس الحساس الشرقي
+      // Always try to return to East at night until sensor is triggered
       if (digitalRead(SENSOR_EAST) == LOW)
       {
-        Serial.println("🌙 Moving East to return to start position...");
-        moveEast(); // تأكد أننا نتحرك شرقًا وليس غربًا
+        Serial.println("🌙 Auto Mode: Returning to East - Moving East...");
+        moveEast();
       }
       else
       {
         Serial.println("✅ Reached East Position - Stopping motor");
         stopMotor();
-        returningToEast = true; // تأكيد العودة وعدم تكرار العملية
       }
     }
   }
